@@ -1,0 +1,124 @@
+trigger:
+  branches:
+    include: [main, develop]
+  paths:
+    exclude: ['*.md', 'docs/*']
+
+variables:
+  acrName:        'automartacr'
+  acrLoginServer: 'automartacr.azurecr.io'
+  aksClusterName: 'automart-aks'
+  resourceGroup:  'automart-rg'
+  k8sNamespace:   'automart'
+  imageTag:       '$(Build.BuildId)'
+
+stages:
+  - stage: BuildAndTest
+    displayName: 'Build and Test'
+    jobs:
+      - job: TestServices
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '20.x'
+          - script: |
+              cd services/product-service   && npm ci && cd ../..
+              cd services/order-service     && npm ci && cd ../..
+              cd services/inventory-service && npm ci && cd ../..
+              cd services/user-service      && npm ci && cd ../..
+              cd services/payment-service   && npm ci && cd ../..
+              cd services/listing-service   && npm ci && cd ../..
+              cd frontend && npm ci && npm run build
+              echo "✅ All builds successful!"
+            displayName: 'Install & Build All'
+
+  - stage: DockerBuild
+    displayName: 'Docker Build & Push'
+    dependsOn: BuildAndTest
+    condition: succeeded()
+    jobs:
+      - job: BuildAndPushImages
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: Docker@2
+            inputs:
+              command: login
+              containerRegistry: 'automart-acr-connection'
+
+          - script: |
+              set -e
+              for SERVICE in product-service order-service inventory-service user-service payment-service listing-service; do
+                docker build -t $(acrLoginServer)/$SERVICE:$(imageTag) ./services/$SERVICE
+                docker push $(acrLoginServer)/$SERVICE:$(imageTag)
+                docker tag  $(acrLoginServer)/$SERVICE:$(imageTag) $(acrLoginServer)/$SERVICE:latest
+                docker push $(acrLoginServer)/$SERVICE:latest
+                echo "✅ $SERVICE pushed"
+              done
+            displayName: 'Build & Push Microservices'
+
+          - script: |
+              docker build -t $(acrLoginServer)/frontend:$(imageTag) ./frontend
+              docker push $(acrLoginServer)/frontend:$(imageTag)
+              docker tag  $(acrLoginServer)/frontend:$(imageTag) $(acrLoginServer)/frontend:latest
+              docker push $(acrLoginServer)/frontend:latest
+            displayName: 'Build & Push Frontend'
+
+  - stage: DeployToAKS
+    displayName: 'Deploy to AKS'
+    dependsOn: DockerBuild
+    condition: succeeded()
+    jobs:
+      - deployment: DeployToProduction
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: KubernetesManifest@1
+                  inputs:
+                    action: deploy
+                    kubernetesServiceConnection: 'automart-aks-connection'
+                    manifests: k8s/namespace.yaml
+
+                - task: KubernetesManifest@1
+                  inputs:
+                    action: deploy
+                    kubernetesServiceConnection: 'automart-aks-connection'
+                    namespace: $(k8sNamespace)
+                    manifests: |
+                      k8s/configmap.yaml
+                      k8s/secrets.yaml
+
+                - task: KubernetesManifest@1
+                  inputs:
+                    action: deploy
+                    kubernetesServiceConnection: 'automart-aks-connection'
+                    namespace: $(k8sNamespace)
+                    manifests: |
+                      k8s/product-deployment.yaml
+                      k8s/order-deployment.yaml
+                      k8s/inventory-deployment.yaml
+                      k8s/user-deployment.yaml
+                      k8s/payment-deployment.yaml
+                      k8s/listing-deployment.yaml
+                      k8s/frontend-deployment.yaml
+                    containers: |
+                      $(acrLoginServer)/product-service:$(imageTag)
+                      $(acrLoginServer)/order-service:$(imageTag)
+                      $(acrLoginServer)/inventory-service:$(imageTag)
+                      $(acrLoginServer)/user-service:$(imageTag)
+                      $(acrLoginServer)/payment-service:$(imageTag)
+                      $(acrLoginServer)/listing-service:$(imageTag)
+                      $(acrLoginServer)/frontend:$(imageTag)
+
+                - task: KubernetesManifest@1
+                  inputs:
+                    action: deploy
+                    kubernetesServiceConnection: 'automart-aks-connection'
+                    namespace: $(k8sNamespace)
+                    manifests: k8s/ingress.yaml

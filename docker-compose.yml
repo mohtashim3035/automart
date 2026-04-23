@@ -1,0 +1,122 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: automart-mongo
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  product-service:
+    build: ./services/product-service
+    container_name: automart-product
+    ports:
+      - '3001:3001'
+    environment:
+      PORT: 3001
+      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-products?authSource=admin
+      JWT_SECRET: automart_jwt_super_secret_2024
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  order-service:
+    build: ./services/order-service
+    container_name: automart-order
+    ports:
+      - '3002:3002'
+    environment:
+      PORT: 3002
+      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-orders?authSource=admin
+      JWT_SECRET: automart_jwt_super_secret_2024
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  inventory-service:
+    build: ./services/inventory-service
+    container_name: automart-inventory
+    ports:
+      - '3003:3003'
+    environment:
+      PORT: 3003
+      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-inventory?authSource=admin
+      JWT_SECRET: automart_jwt_super_secret_2024
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  user-service:
+    build: ./services/user-service
+    container_name: automart-user
+    ports:
+      - '3004:3004'
+    environment:
+      PORT: 3004
+      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-users?authSource=admin
+      JWT_SECRET: automart_jwt_super_secret_2024
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  payment-service:
+    build: ./services/payment-service
+    container_name: automart-payment
+    ports:
+      - '3005:3005'
+    environment:
+      PORT: 3005
+      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-payments?authSource=admin
+      JWT_SECRET: automart_jwt_super_secret_2024
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  listing-service:
+    build: ./services/listing-service
+    container_name: automart-listing
+    ports:
+      - '3006:3006'
+    environment:
+      PORT: 3006
+      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-listings?authSource=admin
+      JWT_SECRET: automart_jwt_super_secret_2024
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
+      PRODUCT_SERVICE_URL: http://product-service:3001
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      product-service:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: automart-frontend
+    ports:
+      - '5173:80'
+    depends_on:
+      - product-service
+      - user-service
+      - listing-service
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

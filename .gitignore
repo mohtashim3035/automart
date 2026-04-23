@@ -1,0 +1,10 @@
+node_modules/
+npm-debug.log
+.env
+.env.local
+.env.production
+frontend/dist/
+frontend/build/
+k8s/secrets.yaml
+.DS_Store
+Thumbs.db
