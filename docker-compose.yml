@@ -1,22 +1,6 @@
 version: '3.8'
 
 services:
-  mongodb:
-    image: mongo:7.0
-    container_name: automart-mongo
-    ports:
-      - '27017:27017'
-    volumes:
-      - mongo-data:/data/db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password123
-    healthcheck:
-      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   product-service:
     build: ./services/product-service
     container_name: automart-product
@@ -24,12 +8,12 @@ services:
       - '3001:3001'
     environment:
       PORT: 3001
-      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-products?authSource=admin
-      JWT_SECRET: automart_jwt_super_secret_2024
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      MONGO_URI: ${MONGO_URI_PRODUCTS}
+      JWT_SECRET: ${JWT_SECRET}
+      INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL}
     restart: unless-stopped
+    networks:
+      - automart-network
 
   order-service:
     build: ./services/order-service
@@ -38,12 +22,13 @@ services:
       - '3002:3002'
     environment:
       PORT: 3002
-      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-orders?authSource=admin
-      JWT_SECRET: automart_jwt_super_secret_2024
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      MONGO_URI: ${MONGO_URI_ORDERS}
+      JWT_SECRET: ${JWT_SECRET}
+      PRODUCT_SERVICE_URL: ${PRODUCT_SERVICE_URL}
+      INVENTORY_SERVICE_URL: ${INVENTORY_SERVICE_URL}
     restart: unless-stopped
+    networks:
+      - automart-network
 
   inventory-service:
     build: ./services/inventory-service
@@ -52,12 +37,11 @@ services:
       - '3003:3003'
     environment:
       PORT: 3003
-      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-inventory?authSource=admin
-      JWT_SECRET: automart_jwt_super_secret_2024
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      MONGO_URI: ${MONGO_URI_INVENTORY}
+      JWT_SECRET: ${JWT_SECRET}
     restart: unless-stopped
+    networks:
+      - automart-network
 
   user-service:
     build: ./services/user-service
@@ -66,12 +50,11 @@ services:
       - '3004:3004'
     environment:
       PORT: 3004
-      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-users?authSource=admin
-      JWT_SECRET: automart_jwt_super_secret_2024
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      MONGO_URI: ${MONGO_URI_USERS}
+      JWT_SECRET: ${JWT_SECRET}
     restart: unless-stopped
+    networks:
+      - automart-network
 
   payment-service:
     build: ./services/payment-service
@@ -80,12 +63,11 @@ services:
       - '3005:3005'
     environment:
       PORT: 3005
-      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-payments?authSource=admin
-      JWT_SECRET: automart_jwt_super_secret_2024
-    depends_on:
-      mongodb:
-        condition: service_healthy
+      MONGO_URI: ${MONGO_URI_PAYMENTS}
+      JWT_SECRET: ${JWT_SECRET}
     restart: unless-stopped
+    networks:
+      - automart-network
 
   listing-service:
     build: ./services/listing-service
@@ -94,29 +76,30 @@ services:
       - '3006:3006'
     environment:
       PORT: 3006
-      MONGO_URI: mongodb://admin:password123@mongodb:27017/automart-listings?authSource=admin
-      JWT_SECRET: automart_jwt_super_secret_2024
+      MONGO_URI: ${MONGO_URI_LISTINGS}
+      JWT_SECRET: ${JWT_SECRET}
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET}
-      PRODUCT_SERVICE_URL: http://product-service:3001
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      product-service:
-        condition: service_started
+      PRODUCT_SERVICE_URL: ${PRODUCT_SERVICE_URL}
     restart: unless-stopped
+    networks:
+      - automart-network
 
   frontend:
     build: ./frontend
     container_name: automart-frontend
     ports:
-      - '5173:80'
+      - '80:80'
     depends_on:
       - product-service
       - user-service
       - listing-service
     restart: unless-stopped
+    networks:
+      - automart-network
 
-volumes:
-  mongo-data:
+networks:
+  automart-network:
+    driver: bridge
+

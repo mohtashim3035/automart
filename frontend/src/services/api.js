@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api', timeout: 10000 });
+const api = axios.create({ baseURL: '/api', timeout: 30000 });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -20,14 +20,14 @@ api.interceptors.response.use(
   }
 );
 
-export const productAPI   = axios.create({ baseURL: 'http://localhost:3001/api', timeout: 10000 });
-export const orderAPI     = axios.create({ baseURL: 'http://localhost:3002/api', timeout: 10000 });
-export const inventoryAPI = axios.create({ baseURL: 'http://localhost:3003/api', timeout: 10000 });
-export const userAPI      = axios.create({ baseURL: 'http://localhost:3004/api', timeout: 10000 });
-export const paymentAPI   = axios.create({ baseURL: 'http://localhost:3005/api', timeout: 10000 });
-export const listingAPI   = axios.create({ baseURL: 'http://localhost:3006/api', timeout: 30000 });
+const isDev = import.meta.env.DEV;
 
-// 30s timeout for listingAPI because image uploads can take time
+export const productAPI   = axios.create({ baseURL: isDev ? 'http://localhost:3001/api' : '/api', timeout: 30000 });
+export const orderAPI     = axios.create({ baseURL: isDev ? 'http://localhost:3002/api' : '/api', timeout: 30000 });
+export const inventoryAPI = axios.create({ baseURL: isDev ? 'http://localhost:3003/api' : '/api', timeout: 30000 });
+export const userAPI      = axios.create({ baseURL: isDev ? 'http://localhost:3004/api' : '/api', timeout: 30000 });
+export const paymentAPI   = axios.create({ baseURL: isDev ? 'http://localhost:3005/api' : '/api', timeout: 30000 });
+export const listingAPI   = axios.create({ baseURL: isDev ? 'http://localhost:3006/api' : '/api', timeout: 30000 });
 
 [productAPI, orderAPI, inventoryAPI, userAPI, paymentAPI, listingAPI].forEach((instance) => {
   instance.interceptors.request.use((config) => {
