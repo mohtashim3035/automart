@@ -27,7 +27,7 @@ export default function Home() {
 
         <div className="relative z-10 text-center px-4 max-w-5xl mx-auto animate-fade-in">
           <div className="badge bg-primary/20 text-primary-light border border-primary/30 mb-6 mx-auto">
-            <Zap className="w-3 h-3" /> United State's #2 Vehicle Marketplace
+            <Zap className="w-3 h-3" /> United State's #1 Vehicle Marketplace
           </div>
           <h1 className="text-6xl md:text-8xl font-display font-bold mb-6 leading-tight">
             <span className="bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
