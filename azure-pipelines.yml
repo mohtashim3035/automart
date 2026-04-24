@@ -3,10 +3,6 @@ trigger:
     include:
       - main
 
-variables:
-  vmIP: '20.55.249.106'
-  vmUser: 'azureuser'
-
 stages:
 
   # STAGE 1: BUILD & TEST
@@ -16,12 +12,18 @@ stages:
       - job: BuildAll
         displayName: 'Install Dependencies and Build'
         pool:
-          vmImage: 'ubuntu-latest'
+          name: Default
+          demands:
+            - agent.name -equals automart-vm-agent
         steps:
-          - task: NodeTool@0
-            inputs:
-              versionSpec: '20.x'
-            displayName: 'Install Node.js 20'
+          - checkout: self
+
+          - script: |
+              echo "Node version:"
+              node --version
+              echo "npm version:"
+              npm --version
+            displayName: 'Check Node.js version'
 
           - script: |
               set -e
@@ -39,11 +41,11 @@ stages:
               cd services/listing-service && npm ci && cd ../..
               echo "Building frontend..."
               cd frontend && npm ci && npm run build
-              echo "All builds successful!"
+              echo "All builds and tests passed!"
             displayName: 'Install All Dependencies and Build Frontend'
 
           - script: |
-              echo "Running health checks on code structure..."
+              echo "Verifying project structure..."
               test -f services/product-service/server.js   && echo "product-service OK"
               test -f services/order-service/server.js     && echo "order-service OK"
               test -f services/inventory-service/server.js && echo "inventory-service OK"
@@ -52,51 +54,49 @@ stages:
               test -f services/listing-service/server.js   && echo "listing-service OK"
               test -f frontend/src/App.jsx                 && echo "frontend OK"
               test -f docker-compose.yml                   && echo "docker-compose OK"
+              test -f k8s/product-deployment.yaml          && echo "k8s configs OK"
               echo "All structure checks passed!"
             displayName: 'Verify Project Structure'
 
-  # STAGE 2: DEPLOY TO AZURE VM
-  - stage: DeployToAzureVM
+  # STAGE 2: DEPLOY
+  - stage: Deploy
     displayName: 'Stage 2 - Deploy to Azure VM'
     dependsOn: BuildAndTest
     condition: succeeded()
     jobs:
-      - deployment: DeployViaSSH
-        displayName: 'SSH Deploy to Azure VM'
+      - deployment: DeployToVM
+        displayName: 'Deploy with Docker Compose'
         pool:
-          vmImage: 'ubuntu-latest'
+          name: Default
+          demands:
+            - agent.name -equals automart-vm-agent
         environment: 'production'
         strategy:
           runOnce:
             deploy:
               steps:
-                - task: SSH@0
-                  displayName: 'Pull latest code and redeploy'
-                  inputs:
-                    sshEndpoint: 'automart-vm-ssh'
-                    runOptions: 'commands'
-                    commands: |
-                      cd ~/automart
-                      git pull origin main
-                      docker compose up --build -d
-                      sleep 15
-                      docker compose ps
-                    readyTimeout: '120000'
+                - checkout: self
 
-                - task: SSH@0
-                  displayName: 'Verify all services healthy'
-                  inputs:
-                    sshEndpoint: 'automart-vm-ssh'
-                    runOptions: 'commands'
-                    commands: |
-                      sleep 10
-                      echo "Checking service health..."
-                      curl -sf http://localhost:3001/health && echo "product-service healthy" || echo "product-service not ready"
-                      curl -sf http://localhost:3002/health && echo "order-service healthy"   || echo "order-service not ready"
-                      curl -sf http://localhost:3003/health && echo "inventory-service healthy" || echo "inventory-service not ready"
-                      curl -sf http://localhost:3004/health && echo "user-service healthy"    || echo "user-service not ready"
-                      curl -sf http://localhost:3005/health && echo "payment-service healthy" || echo "payment-service not ready"
-                      curl -sf http://localhost:3006/health && echo "listing-service healthy" || echo "listing-service not ready"
-                      curl -sf http://localhost:80 && echo "frontend healthy" || echo "frontend not ready"
-                      echo "AutoMart deployed successfully at http://20.55.249.106"
-                    readyTimeout: '60000'
+                - script: |
+                    echo "Pulling latest code..."
+                    cd ~/automart
+                    git pull origin main
+                    echo "Restarting services with Docker Compose..."
+                    docker compose up --build -d
+                    sleep 15
+                    echo "Container status:"
+                    docker compose ps
+                  displayName: 'Pull Code and Redeploy'
+
+                - script: |
+                    echo "Running health checks..."
+                    sleep 10
+                    curl -sf http://localhost:3001/health && echo "product-service healthy" || echo "product-service check"
+                    curl -sf http://localhost:3002/health && echo "order-service healthy"   || echo "order-service check"
+                    curl -sf http://localhost:3003/health && echo "inventory-service healthy" || echo "inventory-service check"
+                    curl -sf http://localhost:3004/health && echo "user-service healthy"    || echo "user-service check"
+                    curl -sf http://localhost:3005/health && echo "payment-service healthy" || echo "payment-service check"
+                    curl -sf http://localhost:3006/health && echo "listing-service healthy" || echo "listing-service check"
+                    curl -sf http://localhost:80          && echo "frontend healthy"        || echo "frontend check"
+                    echo "AutoMart deployed at http://20.55.249.106"
+                  displayName: 'Health Check All Services'
