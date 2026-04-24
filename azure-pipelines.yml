@@ -63,40 +63,42 @@ stages:
     displayName: 'Stage 2 - Deploy to Azure VM'
     dependsOn: BuildAndTest
     condition: succeeded()
+
     jobs:
-      - deployment: DeployToVM
+      - job: DeployToVM
         displayName: 'Deploy with Docker Compose'
         pool:
           name: Default
           demands:
             - agent.name -equals automart-vm-agent
-        environment: 'production'
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - checkout: self
 
-                - script: |
-                    echo "Pulling latest code..."
-                    cd ~/automart
-                    git pull origin main
-                    echo "Restarting services with Docker Compose..."
-                    docker compose up --build -d
-                    sleep 15
-                    echo "Container status:"
-                    docker compose ps
-                  displayName: 'Pull Code and Redeploy'
+        steps:
+          - checkout: self
 
-                - script: |
-                    echo "Running health checks..."
-                    sleep 10
-                    curl -sf http://localhost:3001/health && echo "product-service healthy" || echo "product-service check"
-                    curl -sf http://localhost:3002/health && echo "order-service healthy"   || echo "order-service check"
-                    curl -sf http://localhost:3003/health && echo "inventory-service healthy" || echo "inventory-service check"
-                    curl -sf http://localhost:3004/health && echo "user-service healthy"    || echo "user-service check"
-                    curl -sf http://localhost:3005/health && echo "payment-service healthy" || echo "payment-service check"
-                    curl -sf http://localhost:3006/health && echo "listing-service healthy" || echo "listing-service check"
-                    curl -sf http://localhost:80          && echo "frontend healthy"        || echo "frontend check"
-                    echo "AutoMart deployed at http://20.55.249.106"
-                  displayName: 'Health Check All Services'
+          - script: |
+              echo "Pulling latest code..."
+              cd ~/automart
+              git pull origin main
+
+              echo "Restarting services..."
+              docker compose down
+              docker compose up --build -d
+
+              sleep 15
+              docker compose ps
+            displayName: 'Deploy Application'
+
+          - script: |
+              echo "Running health checks..."
+              sleep 10
+
+              curl -sf http://localhost:3001/health || echo "product-service issue"
+              curl -sf http://localhost:3002/health || echo "order-service issue"
+              curl -sf http://localhost:3003/health || echo "inventory-service issue"
+              curl -sf http://localhost:3004/health || echo "user-service issue"
+              curl -sf http://localhost:3005/health || echo "payment-service issue"
+              curl -sf http://localhost:3006/health || echo "listing-service issue"
+              curl -sf http://localhost || echo "frontend issue"
+
+              echo "AutoMart deployed at http://20.55.249.106"
+            displayName: 'Health Check'
